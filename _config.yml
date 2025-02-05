@@ -4,16 +4,16 @@
 
 # Site
 title: Rikka's Blog
-subtitle: ''
-description: ''
+subtitle: '开始尝试写一些内容'
+description: '感觉什么都不太会，什么有点想学的，初出茅庐的 CS 学生'
 keywords:
 author: Rikka
 language: zh
-timezone: ''
+timezone: 'Asia/Shanghai'
 
 # URL
 ## Set your site url here. For example, if you use GitHub Page, set url as 'https://username.github.io/project'
-url: https://n13r.top
+url: https://r1kka.one
 permalink: :year/:month/:day/:title/
 permalink_defaults:
 pretty_urls:
