@@ -164,7 +164,61 @@ func (logtoClient *LogtoClient) SignInWithRedirectUri(redirectUri string) (strin
 
 一直到了晚上，纠结得头疼，感觉是 SDK 哪里给我自作聪明做了奇怪的验证的问题，但又实在是不想抛弃 SDK 去手搓请求，还是决定还是去看看 SDK 的源码，希望能找到问题。
 
-Ctrl+Click 进入 `SignIn(options *SignInOptions) (string, error)` 方法，看了下好像没发现哪里有问题
+Ctrl+Click 进入 `SignIn(options *SignInOptions) (string, error)` 方法，看了下好像没发现哪里有问题；又看了下 callback 路由实现里的 `HandleSignInCallback(request *http.Request) error` 方法，很大一堆也没看出头绪来。这时我一不小心把 ESC 按成了 F1，一个全局搜索框出现在我眼前。
+
+我突然想到可以搜索，便把错误信息粘贴了进去，菊花转了几圈后，一个 `Err` 开头的变量出现了，让我顿时感觉找对了地方：`ErrCallbackUriNotMatchRedirectUri`
+
+查看定义：
+
+```go
+var ErrCallbackUriNotMatchRedirectUri = errors.New("callback uri not match redirect uri")
+```
+
+这不正是我要找的吗！查看 usage，只有两个，其中一个还是测试文件。这下稳了！点进引用，我在对应的方法第一行就看到了这个错误：
+
+```go
+func VerifyAndParseCodeFromCallbackUri(callbackUri, redirectUri, state string) (string, error) {
+	if !strings.HasPrefix(callbackUri, redirectUri) {
+		return "", ErrCallbackUriNotMatchRedirectUri
+	}
+	// ...
+```
+
+果然是 SDK 自作聪明做的验证..........我把中间的 `return` 语句临时注释掉，报错变成了 token 格式错误，我想可能是前面查询完一次就自动清除的 `SimpleStorage` 爆雷了。先不管他，总不能一直注释掉吧，还是得看看问题出在哪。
+
+再跳转到这个函数的引用，也是除了测试外就一个，发现就是上面的 `SignIn(...)`，可能当时没仔细看，没看出来罢。
+
+```go
+func (logtoClient *LogtoClient) HandleSignInCallback(request *http.Request) error {
+	signInSession := SignInSession{}
+	parseSignInSessionErr := json.Unmarshal([]byte(logtoClient.storage.GetItem(StorageKeySignInSession)), &signInSession)
+
+	if parseSignInSessionErr != nil {
+		return parseSignInSessionErr
+	}
+
+	callbackUri := GetOriginRequestUrl(request)
+	code, retrieveCodeErr := core.VerifyAndParseCodeFromCallbackUri(callbackUri, signInSession.RedirectUri, signInSession.State)
+	if retrieveCodeErr != nil {
+		return retrieveCodeErr
+	}
+	// ...
+```
+
+其中：
+
+```go
+func GetOriginRequestUrl(request *http.Request) string {
+	return getRequestProtocol(request) + "://" + request.Host + request.RequestURI
+}
+```
+
+各个地方都打个断点看看吧，果然发现了不对的地方。
+![](https://pics.r1kka.one/file/1743477073363_%E5%9B%BE%E7%89%87.png)
+
+此处（`VerifyAndParseCodeFromCallbackUri`）里的参数似乎不太准确，`callbackUri` 是不准确的，怪不得会验证不通过。这个变量来自于 `GetOriginRequestUrl(request)` 函数的处理，这个函数没问题，那就是.........传入的 `request` 参数的问题了？
+
+又打了断点查看 `request` 参数，这下真相大白了。
 
 
 **施工中........**
