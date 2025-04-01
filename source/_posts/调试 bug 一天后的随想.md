@@ -3,7 +3,7 @@ abbrlink: ''
 categories: []
 date: '2025-04-01T00:16:29.572860+08:00'
 tags: []
-title: bug-day
+title: 调试 bug 一天后的随想
 updated: '2025-04-01T00:19:19.248+08:00'
 ---
 # 调试 bug 一天后的随想
