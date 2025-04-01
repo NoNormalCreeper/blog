@@ -1,5 +1,5 @@
 ---
-abbrlink: ''
+abbrlink: bug-day
 categories: []
 date: '2025-04-01T00:16:29.572860+08:00'
 tags: []
