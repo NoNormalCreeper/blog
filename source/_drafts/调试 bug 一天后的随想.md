@@ -139,14 +139,26 @@ func (h *AuthHandler) OidcCallback(ctx *fiber.Ctx) error {
 开始一个未认证错误吓我一跳，提示的是 OAuth 里的错误，\`redirect_uri\` did not match any of the client's registered \`redirect_uris\`.
 
 然后发现只是我漏填了一个 `/auth` ，地址直接填了 `/oidc/callback`，修正后一下子就.......还是失败了，但是错误信息变得看似清晰实则扑朔迷离了起来。
+![](https://pics.r1kka.one/file/1743474249583_img_v3_02kt_1f6da1d6-6e23-4de4-81fc-1d1e15ec85cg.jpg)
 
+我检查了各个地方的 `callback uri` 和 `redirect uri`，发现都是一样的，输出调试日志发现也是一样的。
+![](https://pics.r1kka.one/file/1743474815050_%E5%9B%BE%E7%89%87.png)
 
- ![](https://pics.r1kka.one/file/1743474249583_img_v3_02kt_1f6da1d6-6e23-4de4-81fc-1d1e15ec85cg.jpg)
+在 Google 搜了一圈居然没搜到相关的报错，查了 SDK 文档也没有说明。实际上文档只是在 pkg.go.dev 里面列出了各个结构和方法的定义而已，几乎没有作出说明。
 
+这时我看到 pkg.go.dev 里面的版本是 v2.0.0，而我这里的版本仍是 v1，于是我进行了升级，并使用了新的函数 `SignInWithRedirectUri(callbackUrl)`，结果无济于事，该报错还是报错。
 
+注：后续发现这个方法内部的实现如下，只是对原先的方法进行了一个包装，其实效果是一样的
 
+```go
+func (logtoClient *LogtoClient) SignInWithRedirectUri(redirectUri string) (string, error) {
+	return logtoClient.SignIn(&SignInOptions{
+		RedirectUri: redirectUri,
+	})
+}
+```
 
-
+丢给 AI 改了一圈，也只是让我输出调试日志和让我改一些莫名其妙的小错误，一直没有帮助。卡了两三个小时在改这些地方和搜没用的资料上。
 
 
 **施工中........**
