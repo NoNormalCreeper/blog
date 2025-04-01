@@ -58,7 +58,7 @@ func (s *SimpleStorage) SetItem(key, value string) {
 }
 ```
 
-我自作聪明地查找之后直接清除掉了数据，想着应该不会第二次再查找了。然而这在后面抓耳挠腮的时候并不是主要的 bug。
+我自作聪明地查找之后直接清除掉了数据，想着应该不会第二次再查询值了。然而这在后面抓耳挠腮的时候并不是主要的 bug。
 
 在注册路由的地方添加了两个路由，开始实现处理方法。
 
@@ -73,8 +73,38 @@ func (h *AuthHandler) RegisterRoutes(app *fiber.App, userHandler *UserHandler) {
 }
 ```
 
+其中，`/oidc/login` 的路由很好实现，官方文档中给出了 SDK 示例，有一个内置的 `SignIn(callbackUrl string) error` 方法，照着抄传入回调地址就完事：
 
----
+```go
+func (h *AuthHandler) OidcLogin(ctx *fiber.Ctx) error {
+	backendUrl := os.Getenv("BACKEND_URL")
+	signInUri, err := h.logtoClient.SignIn(backendUrl + "/auth/oidc/callback")
+	if err != nil {
+		log.Printf("OIDC登录失败: %v", err)
+		// 错误响应....
+	}
+
+	err = ctx.Redirect(signInUri, fiber.StatusFound)
+	if err != nil {
+		log.Printf("重定向失败: %v", err)
+		// 错误响应....
+	}
+
+	return nil
+}
+```
+
+回调地址 `/oidc/callback` 的实现，我也是抄的官方文档，也有一个方法 `HandleSignInCallback(request *http.Request) error `直接负责处理回调请求。因为我的应用并不需要处理重定向到首页和存储 Cookie，只负责返回一个 JWT，所以也十分简单：
+
+```go
+func (h *AuthHandler) OidcCallback(ctx *fiber.Ctx) error {
+	err := h.logtoClient.HandleSignInCallback(ctx.Request())
+	if err != nil {
+		ctx.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+}
+```
 
 
 
