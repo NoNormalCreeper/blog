@@ -220,5 +220,76 @@ func GetOriginRequestUrl(request *http.Request) string {
 
 又打了断点查看 `request` 参数，这下真相大白了。
 
+![](https://pics.r1kka.one/file/1743477532696_%E5%9B%BE%E7%89%87.png)
 
-**施工中........**
+该对象的 `RequestURI` 属性为空，因此，传入 `GetOriginRequestUrl(request *http.Request)` 之后，取出来的 `request.RequestURI` 也为空，所以返回值就是 `<portocal>://<host>` 了，没有后面的 `path`。这也就说明了为什么上面的 `callbackUri` 有残缺。
+
+那就改呗。这次我不敢相信 copilot 了，直接在 Bing 上搜索转化方法，结果还是 AI 生成的结果。依然没有设置 `RequestURI` 参数，于是我只好自己添加上去了。
+
+```go
+// Convert the fiber/fasthttp request to a standard net/http request
+func convertFastHTTPToHTTPRequest(fastReq *fasthttp.Request) (*http.Request, error) {
+	// Create a new http.Request
+	req, err := http.NewRequest(
+		string(fastReq.Header.Method()),
+		fastReq.URI().String(),
+		bytes.NewReader(fastReq.Body()),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// 此处我自己添加.... Set the request URL
+	req.RequestURI = string(fastReq.RequestURI())
+
+	// Copy headers
+	fastReq.Header.VisitAll(func(key, value []byte) {
+		req.Header.Set(string(key), string(value))
+	})
+
+	return req, nil
+}
+```
+
+改完后能跑通了，问题变成了 token 格式错误，拉出调试器一看，果然是调用了两次从存储中取值的方法，于是我把我的储存实现从读取一次自动清除改为了 60 分钟后自动删除，这下应该不会出问题了。修改后的定义和实现如下：
+
+```go
+type SimpleStorage struct {
+	storage map[string]StorageItem
+}
+
+func (s *SimpleStorage) Cleanup() {
+	for key, item := range s.storage {
+		if time.Now().After(item.ExpiresAt) {
+			delete(s.storage, key)
+			log.Printf("清除过期的存储项: %s", key)
+		}
+	}
+}
+
+func (s *SimpleStorage) GetItem(key string) string {
+	if value, ok := s.storage[key]; ok {
+		log.Printf("从内存中获取值: %s = %s", key, value.Value)
+		return value.Value
+	}
+	s.Cleanup()
+
+	log.Printf("未找到内存中的值: %s", key)
+	return ""
+}
+
+func (s *SimpleStorage) SetItem(key, value string) {
+	expiration := time.Now().Add(1 * time.Hour)
+	s.storage[key] = StorageItem{
+		Value:     value,
+		ExpiresAt: expiration,
+	}
+	log.Printf("存储值到内存: %s = %s", key, value)
+	s.Cleanup()
+}
+```
+
+至此接口的实现都没有问题了，最后添加上获取用户信息并生成 JWT 令牌，明天再写保护其他 API 中间件吧，累了。
+
+我心满意足地躺上了床，又感觉这个 bug 是那种找了一天找不出来，最后发现很简单的类型。虽然有找到问题的满足，但也有对自己死活意识不到问题，开始走了那么多弯路的不甘（）
+
