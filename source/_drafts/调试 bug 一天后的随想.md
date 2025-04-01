@@ -139,9 +139,11 @@ func (h *AuthHandler) OidcCallback(ctx *fiber.Ctx) error {
 开始一个未认证错误吓我一跳，提示的是 OAuth 里的错误，\`redirect_uri\` did not match any of the client's registered \`redirect_uris\`.
 
 然后发现只是我漏填了一个 `/auth` ，地址直接填了 `/oidc/callback`，修正后一下子就.......还是失败了，但是错误信息变得看似清晰实则扑朔迷离了起来。
+
 ![](https://pics.r1kka.one/file/1743474249583_img_v3_02kt_1f6da1d6-6e23-4de4-81fc-1d1e15ec85cg.jpg)
 
 我检查了各个地方的 `callback uri` 和 `redirect uri`，发现都是一样的，输出调试日志发现也是一样的。
+
 ![](https://pics.r1kka.one/file/1743474815050_%E5%9B%BE%E7%89%87.png)
 
 在 Google 搜了一圈居然没搜到相关的报错，查了 SDK 文档也没有说明。实际上文档只是在 pkg.go.dev 里面列出了各个结构和方法的定义而已，几乎没有作出说明，最头疼的就是这种。
@@ -186,7 +188,7 @@ func VerifyAndParseCodeFromCallbackUri(callbackUri, redirectUri, state string) (
 
 果然是 SDK 自作聪明做的验证..........我把中间的 `return` 语句临时注释掉，报错变成了 token 格式错误，我想可能是前面查询完一次就自动清除的 `SimpleStorage` 爆雷了。先不管他，总不能一直注释掉吧，还是得看看问题出在哪。
 
-再跳转到这个函数的引用，也是除了测试外就一个，发现就是上面的 `SignIn(...)`，可能当时没仔细看，没看出来罢。
+再跳转到这个函数的引用，也是除了测试外就一个，发现就是上面的 `HandleSignInCallback(...)`，可能当时没仔细看，没看出来罢。
 
 ```go
 func (logtoClient *LogtoClient) HandleSignInCallback(request *http.Request) error {
@@ -214,6 +216,7 @@ func GetOriginRequestUrl(request *http.Request) string {
 ```
 
 各个地方都打个断点看看吧，果然发现了不对的地方。
+
 ![](https://pics.r1kka.one/file/1743477073363_%E5%9B%BE%E7%89%87.png)
 
 此处（`VerifyAndParseCodeFromCallbackUri`）里的参数似乎不太准确，`callbackUri` 是不准确的，怪不得会验证不通过。这个变量来自于 `GetOriginRequestUrl(request)` 函数的处理，这个函数没问题，那就是.........传入的 `request` 参数的问题了？
