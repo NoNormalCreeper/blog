@@ -105,7 +105,7 @@ func (h *AuthHandler) OidcCallback(ctx *fiber.Ctx) error {
 }
 ```
 
-这里出现了第一个问题，由于第二行的 `fiber.Ctx.Request()` 返回的是一个 `*fasthttp.Request` 对象，但 `HandleSignInCallback()` 接受的参数是一个标准库的 `*http.Request` 对象，因此需要转化。我写了一行注释，简单让 Copilot 补全了一下，他给我补上了这些代码：
+这里出现了第一个问题，由于第二行的 `fiber.Ctx.Request()` 返回的是一个 `*fasthttp.Request` 对象，但 `HandleSignInCallback()` 接受的参数是一个标准库的 `*http.Request` 对象，因此需要转化。我写了一行注释，简单让 Copilot 补全了一下，他给我补上了一些代码，全部实现：
 
 ```go
 func (h *AuthHandler) OidcCallback(ctx *fiber.Ctx) error {
@@ -125,16 +125,16 @@ func (h *AuthHandler) OidcCallback(ctx *fiber.Ctx) error {
     ctx.Request().Header.VisitAll(func(key, value []byte) {
         req.Header.Add(string(key), string(value))
     })
-
-	err := h.logtoClient.HandleSignInCallback(req)
-	if err != nil {
-		ctx.String(http.StatusInternalServerError, err.Error())
-		return
-	}
+    err := h.logtoClient.HandleSignInCallback(req)
+    if err != nil {
+        log.Printf("处理OIDC回调失败: %v", err)
+        // 错误响应...
+        return
+    }
 }
 ```
 
-看起来很棒，跑了一下完全可以跑通了。
+看起来是手动把参数填进去，很棒，跑了一下完全可以跑通了。
 
 开始一个未认证错误吓我一跳，提示的是 OAuth 里的错误，\`redirect_uri\` did not match any of the client's registered \`redirect_uris\`.
 
@@ -144,7 +144,7 @@ func (h *AuthHandler) OidcCallback(ctx *fiber.Ctx) error {
 我检查了各个地方的 `callback uri` 和 `redirect uri`，发现都是一样的，输出调试日志发现也是一样的。
 ![](https://pics.r1kka.one/file/1743474815050_%E5%9B%BE%E7%89%87.png)
 
-在 Google 搜了一圈居然没搜到相关的报错，查了 SDK 文档也没有说明。实际上文档只是在 pkg.go.dev 里面列出了各个结构和方法的定义而已，几乎没有作出说明。
+在 Google 搜了一圈居然没搜到相关的报错，查了 SDK 文档也没有说明。实际上文档只是在 pkg.go.dev 里面列出了各个结构和方法的定义而已，几乎没有作出说明，最头疼的就是这种。
 
 这时我看到 pkg.go.dev 里面的版本是 v2.0.0，而我这里的版本仍是 v1，于是我进行了升级，并使用了新的函数 `SignInWithRedirectUri(callbackUrl)`，结果无济于事，该报错还是报错。
 
@@ -159,6 +159,12 @@ func (logtoClient *LogtoClient) SignInWithRedirectUri(redirectUri string) (strin
 ```
 
 丢给 AI 改了一圈，也只是让我输出调试日志和让我改一些莫名其妙的小错误，一直没有帮助。卡了两三个小时在改这些地方和搜没用的资料上。
+
+用 debugger 打断点看到各个地方的 URL 也没什么差异，我还去搜了一下 redirect uri 和 callback uri 的差别，也无果。
+
+一直到了晚上，纠结得头疼，感觉是 SDK 哪里给我自作聪明做了奇怪的验证的问题，但又实在是不想抛弃 SDK 去手搓请求，还是决定还是去看看 SDK 的源码，希望能找到问题。
+
+Ctrl+Click 进入 `SignIn(options *SignInOptions) (string, error)` 方法，看了下好像没发现哪里有问题
 
 
 **施工中........**
